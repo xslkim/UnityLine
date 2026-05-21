@@ -7,6 +7,7 @@ using UnityEngine.UI;
 /// 以指定线宽和颜色绘制折线。
 /// M7 实现 SDF AA 路线。M9 脏标节流、顶点上限截断。
 /// </summary>
+[RequireComponent(typeof(CanvasRenderer))]
 public sealed class UILine : MaskableGraphic
 {
     // ── 基础 ──────────────────────────────

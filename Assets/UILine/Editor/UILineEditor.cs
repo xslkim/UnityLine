@@ -22,6 +22,11 @@ public class UILineEditor : Editor
     private SerializedProperty _dashOffset;
     private SerializedProperty _closed;
 
+    private const string PrefEditPointsInScene = "UILine.EditPointsInScene";
+
+    // ── Scene 点编辑（默认关闭，与 Game 视图一致仅绘制）────
+    private bool _editPointsInScene;
+
     // ── Foldout states ──────────────────────
     private bool _foldBase = true;
     private bool _foldJoin = true;
@@ -31,6 +36,8 @@ public class UILineEditor : Editor
 
     private void OnEnable()
     {
+        _editPointsInScene = EditorPrefs.GetBool(PrefEditPointsInScene, false);
+        EnsureCanvasRenderer();
         _points       = serializedObject.FindProperty("_points");
         _lineWidth    = serializedObject.FindProperty("_lineWidth");
         _mColor       = serializedObject.FindProperty("m_Color");
@@ -48,15 +55,39 @@ public class UILineEditor : Editor
         _closed       = serializedObject.FindProperty("_closed");
     }
 
+    private void EnsureCanvasRenderer()
+    {
+        foreach (var t in targets)
+        {
+            if (t is not UILine line) continue;
+            if (line.GetComponent<CanvasRenderer>() != null) continue;
+            Undo.AddComponent<CanvasRenderer>(line.gameObject);
+            EditorUtility.SetDirty(line);
+        }
+    }
+
     public override void OnInspectorGUI()
     {
+        EnsureCanvasRenderer();
         serializedObject.Update();
+
+        // 点列表的默认绘制器自带 Foldout，不能放在 BeginFoldoutHeaderGroup 内（会嵌套报错）
+        EditorGUILayout.PropertyField(_points, new GUIContent("点序列"), true);
+
+        EditorGUI.BeginChangeCheck();
+        _editPointsInScene = EditorGUILayout.Toggle(new GUIContent("Scene 编辑点"), _editPointsInScene);
+        if (EditorGUI.EndChangeCheck())
+        {
+            EditorPrefs.SetBool(PrefEditPointsInScene, _editPointsInScene);
+            SceneView.RepaintAll();
+        }
+        if (_editPointsInScene)
+            EditorGUILayout.HelpBox("Scene 视图中可拖拽控制点；关闭后 Scene 与 Game 一样仅显示折线。", MessageType.None);
 
         // ── 基础 ────────────────────────────
         _foldBase = EditorGUILayout.BeginFoldoutHeaderGroup(_foldBase, "基础");
         if (_foldBase)
         {
-            EditorGUILayout.PropertyField(_points, new GUIContent("点序列"), true);
             EditorGUILayout.PropertyField(_lineWidth, new GUIContent("线宽"));
             EditorGUILayout.PropertyField(_mColor, new GUIContent("颜色"));
         }
@@ -129,6 +160,9 @@ public class UILineEditor : Editor
 
     private void OnSceneGUI()
     {
+        if (!_editPointsInScene)
+            return;
+
         var line = (UILine)target;
         if (line.PointCount == 0) return;
 

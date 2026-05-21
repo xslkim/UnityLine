@@ -57,7 +57,8 @@ public static class UILineBuilder
             {
                 actualFeather = lineWidth * 0.5f;
                 coreHalfWidth = 0f;
-                coreAlpha = lineWidth / (2f * featherPixels);
+                // 无核心条带、仅羽化带承载线宽时，中心线用满 alpha（避免 1px 线几乎不可见）
+                coreAlpha = 1f;
                 featherAlpha = 0f;
             }
             else
@@ -340,8 +341,12 @@ public static class UILineBuilder
                 vh.AddVert(new UIVertex { position = f2 + origin, color = featherColor, uv0 = Vector2.zero });
                 vh.AddVert(new UIVertex { position = f3 + origin, color = featherColor, uv0 = Vector2.zero });
 
-                vh.AddTriangle(b + 0, b + 2, b + 1);
-                vh.AddTriangle(b + 1, b + 2, b + 3);
+                // 窄线时 coreHalfWidth=0，核心 quad 退化为零面积，跳过以免干扰渲染
+                if (coreHalfWidth > 1e-6f)
+                {
+                    vh.AddTriangle(b + 0, b + 2, b + 1);
+                    vh.AddTriangle(b + 1, b + 2, b + 3);
+                }
 
                 vh.AddTriangle(b + 0, b + 2, b + 6);
                 vh.AddTriangle(b + 0, b + 6, b + 4);
@@ -664,9 +669,10 @@ public static class UILineBuilder
                 vh.AddVert(MakeVert(p, featherColor));
             }
 
-            for (int i = 0; i < steps; i++)
+            if (coreRadius > 1e-6f)
             {
-                vh.AddTriangle(baseIdx, baseIdx + 1 + i, baseIdx + 2 + i);
+                for (int i = 0; i < steps; i++)
+                    vh.AddTriangle(baseIdx, baseIdx + 1 + i, baseIdx + 2 + i);
             }
 
             int coreRingStart = baseIdx + 1;
@@ -693,9 +699,10 @@ public static class UILineBuilder
                 vh.AddVert(MakeVert(p, coreColor));
             }
 
-            for (int i = 0; i < steps; i++)
+            if (coreRadius > 1e-6f)
             {
-                vh.AddTriangle(baseIdx, baseIdx + 1 + i, baseIdx + 2 + i);
+                for (int i = 0; i < steps; i++)
+                    vh.AddTriangle(baseIdx, baseIdx + 1 + i, baseIdx + 2 + i);
             }
         }
     }
@@ -766,9 +773,10 @@ public static class UILineBuilder
                 vh.AddVert(MakeVert(p, featherColor));
             }
 
-            for (int i = 0; i < steps; i++)
+            if (coreRadius > 1e-6f)
             {
-                vh.AddTriangle(baseIdx, baseIdx + 1 + i, baseIdx + 2 + i);
+                for (int i = 0; i < steps; i++)
+                    vh.AddTriangle(baseIdx, baseIdx + 1 + i, baseIdx + 2 + i);
             }
 
             int coreRingStart = baseIdx + 1;
