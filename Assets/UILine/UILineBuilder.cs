@@ -439,6 +439,7 @@ public static class UILineBuilder
                 outerPrev = s_plusEnd[prev],
                 outerNext = s_plusStart[next],
                 outerMiter = Vector2.zero,
+                innerCorner = center,
                 featherPrev = hasAA ? s_plusEnd[prev] + nA * actualFeather : Vector2.zero,
                 featherNext = hasAA ? s_plusStart[next] + nB * actualFeather : Vector2.zero,
                 featherMiter = Vector2.zero,
@@ -458,6 +459,7 @@ public static class UILineBuilder
                 outerPrev = s_minusEnd[prev],
                 outerNext = s_minusStart[next],
                 outerMiter = Vector2.zero,
+                innerCorner = center,
                 featherPrev = hasAA ? s_minusEnd[prev] - nA * actualFeather : Vector2.zero,
                 featherNext = hasAA ? s_minusStart[next] - nB * actualFeather : Vector2.zero,
                 featherMiter = Vector2.zero,
@@ -514,6 +516,7 @@ public static class UILineBuilder
             outerPrev = outerPrev,
             outerNext = outerNext,
             outerMiter = outerMiter,
+            innerCorner = plusIsInner ? s_plusEnd[prev] : s_minusEnd[prev],
             featherPrev = hasAA ? outerPrev + nO * actualFeather : Vector2.zero,
             featherNext = hasAA ? outerNext + nP * actualFeather : Vector2.zero,
             featherMiter = hasAA ? outerMiter + (-s) * m * actualFeather : Vector2.zero,
@@ -531,7 +534,7 @@ public static class UILineBuilder
 
     private struct JoinInfo
     {
-        public Vector2 center, outerPrev, outerNext, outerMiter;
+        public Vector2 center, outerPrev, outerNext, outerMiter, innerCorner;
         public Vector2 featherPrev, featherNext, featherMiter;
         public LineJoin join;
         public float miterLimit, mDotNA, coreHalfWidth;
@@ -622,8 +625,63 @@ public static class UILineBuilder
                 AddRoundFan(vh, pc, op, on, ji.coreHalfWidth, ji.roundSectors,
                             coreColor, featherColor,
                             ji.hasAA, ji.actualFeather, ji.coreAlpha, ji.featherAlpha);
+                AddJoinVertexWedges(vh, ji, coreColor, featherColor, origin);
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    /// 在接头顶点处填充线段端面与外侧圆角之间的楔形（核心 + AA 羽化）。
+    /// </summary>
+    private static void AddJoinVertexWedges(VertexHelper vh, JoinInfo ji,
+        Color coreColor, Color featherColor, Vector2 origin)
+    {
+        Vector2 pc = ji.center + origin;
+        Vector2 op = ji.outerPrev + origin;
+        Vector2 on = ji.outerNext + origin;
+        Vector2 ic = ji.innerCorner + origin;
+
+        if ((ic - pc).sqrMagnitude < 1e-12f)
+            return;
+
+        if (ji.hasAA)
+        {
+            Vector2 fp = ji.featherPrev + origin;
+            Vector2 fn = ji.featherNext + origin;
+            Vector2 toInner = ji.innerCorner - ji.center;
+            float innerLen = toInner.magnitude;
+            Vector2 fi = innerLen > 1e-6f
+                ? (ji.innerCorner + toInner / innerLen * ji.actualFeather) + origin
+                : ic;
+
+            int b = vh.currentVertCount;
+            vh.AddVert(MakeVert(op, coreColor));
+            vh.AddVert(MakeVert(pc, coreColor));
+            vh.AddVert(MakeVert(ic, coreColor));
+            vh.AddVert(MakeVert(on, coreColor));
+            vh.AddVert(MakeVert(fp, featherColor));
+            vh.AddVert(MakeVert(fi, featherColor));
+            vh.AddVert(MakeVert(fn, featherColor));
+
+            vh.AddTriangle(b + 0, b + 1, b + 2);
+            vh.AddTriangle(b + 0, b + 2, b + 5);
+            vh.AddTriangle(b + 0, b + 5, b + 4);
+
+            vh.AddTriangle(b + 3, b + 1, b + 2);
+            vh.AddTriangle(b + 3, b + 2, b + 5);
+            vh.AddTriangle(b + 3, b + 5, b + 6);
+        }
+        else
+        {
+            int b = vh.currentVertCount;
+            vh.AddVert(MakeVert(op, coreColor));
+            vh.AddVert(MakeVert(pc, coreColor));
+            vh.AddVert(MakeVert(ic, coreColor));
+            vh.AddTriangle(b, b + 1, b + 2);
+
+            vh.AddVert(MakeVert(on, coreColor));
+            vh.AddTriangle(b + 3, b + 1, b + 2);
         }
     }
 
